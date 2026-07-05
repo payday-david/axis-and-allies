@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Map Data Debug</title>
+<style>
+  body { font-family: monospace; padding: 20px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<!--
+  This is not the game UI — just a sanity check that the ES modules load
+  correctly and the map data is internally consistent. Open the browser
+  console too; the same info is logged there.
+-->
+<div id="output">Loading map data…</div>
+
+<script type="module">
+  import { createGameMap, findAsymmetricAdjacencies, ipcIncome, NATIONS } from './js/map.js';
+
+  const map = createGameMap();
+  const problems = findAsymmetricAdjacencies(map);
+
+  console.log('Game map:', map);
+  console.log('Adjacency problems:', problems);
+
+  let report = problems.length
+    ? `ADJACENCY PROBLEMS FOUND:\n${problems.join('\n')}\n\n`
+    : 'Adjacency check passed: every link is reciprocated.\n\n';
+
+  report += 'Territories:\n';
+  for (const t of Object.values(map)) {
+    const owner = t.owner ? NATIONS[t.owner].name : '(unowned)';
+    const units = Object.entries(t.units).map(([k, n]) => `${n} ${k}`).join(', ') || 'none';
+    report += `- ${t.name} [${t.type}]${t.isCapital ? ' (capital)' : ''} — owner: ${owner}, ipc: ${t.ipcValue}, units: ${units}\n`;
+    report += `    adjacent: ${t.adjacent.join(', ')}\n`;
+  }
+
+  report += '\nIPC income by nation:\n';
+  for (const nationId of Object.keys(NATIONS)) {
+    report += `- ${NATIONS[nationId].name}: ${ipcIncome(map, nationId)}\n`;
+  }
+
+  document.getElementById('output').textContent = report;
+</script>
+</body>
+</html>
