@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Axis &amp; Allies — Turn Loop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Prototype — Turn-Phase Engine</div>
+    <h1>Axis &amp; Allies: Turn Loop</h1>
+    <div class="sub">Purchase → Combat Move → Combat Resolution → Non-Combat Move → Mobilize → Income, cycling through all five nations. No AI opponent yet — everyone is played by hand so the loop itself can be tested.</div>
+    <div style="margin-top:8px;"><a class="nav-link" href="index.html">← Combat Resolver Demo</a> &nbsp;·&nbsp; <a class="nav-link" href="map-debug.html">Map Data Debug</a></div>
+  </header>
+
+  <div class="hud">
+    <div><b>Turn</b><span id="round-label"></span></div>
+    <div><b>Nation</b><span id="nation-label"></span></div>
+    <div><b>Phase</b><span id="phase-label"></span></div>
+    <div><b>Treasury</b><span id="treasury-label"></span></div>
+    <div style="margin-left:auto;align-self:center;"><button class="reset" id="new-game-btn">New Game</button></div>
+  </div>
+
+  <div class="phase-steps" id="phase-steps"></div>
+
+  <div class="grid" style="grid-template-columns:1fr 1fr;">
+    <div class="card" data-tag="Territories">
+      <h2>The Board</h2>
+      <div id="board"></div>
+    </div>
+    <div class="card" data-tag="This Phase">
+      <h2 id="phase-panel-title">Actions</h2>
+      <div id="phase-panel"></div>
+    </div>
+  </div>
+
+  <div class="log-panel">
+    <div style="font-family:'Special Elite',monospace;font-size:12px;text-transform:uppercase;margin-bottom:8px;">Turn Log</div>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script type="module" src="js/game.js"></script>
+</body>
+</html>
