@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AFTER ACTION — Combat Resolution Module v1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EDE6D3;
+    --paper-dark:#E2D9C0;
+    --ink:#23261F;
+    --olive:#4A5324;
+    --olive-dark:#363C1A;
+    --rust:#A13D2E;
+    --brass:#9C7A3C;
+    --line:#B9AF8E;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    background-image:
+      repeating-linear-gradient(0deg, rgba(0,0,0,0.015) 0px, rgba(0,0,0,0.015) 1px, transparent 1px, transparent 3px);
+    color:var(--ink);
+    font-family:'Courier Prime', monospace;
+    padding:24px 16px 60px;
+  }
+  .wrap{max-width:900px;margin:0 auto;}
+  header{
+    border-bottom:3px double var(--ink);
+    padding-bottom:14px;
+    margin-bottom:22px;
+  }
+  .eyebrow{
+    font-family:'Special Elite', monospace;
+    font-size:11px;
+    letter-spacing:3px;
+    color:var(--rust);
+    text-transform:uppercase;
+  }
+  h1{
+    font-family:'Special Elite', monospace;
+    font-size:28px;
+    margin:4px 0 6px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+  }
+  .sub{font-size:13px;color:#5b5a4f;max-width:560px;line-height:1.5;}
+
+  .grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:18px;
+    margin-bottom:20px;
+  }
+  @media (max-width:640px){.grid{grid-template-columns:1fr;}}
+
+  .card{
+    background:var(--paper-dark);
+    border:1px solid var(--line);
+    padding:16px 18px;
+    position:relative;
+  }
+  .card::before{
+    content:attr(data-tag);
+    position:absolute; top:-11px; left:14px;
+    background:var(--ink); color:var(--paper);
+    font-family:'Special Elite',monospace;
+    font-size:10px; letter-spacing:2px;
+    padding:3px 8px;
+    text-transform:uppercase;
+  }
+  .card h2{
+    font-family:'Special Elite',monospace;
+    font-size:15px; margin:8px 0 12px;
+    text-transform:uppercase;
+    border-bottom:1px solid var(--line);
+    padding-bottom:8px;
+  }
+
+  .unit-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:6px 0;
+    border-bottom:1px dashed var(--line);
+    font-size:13px;
+  }
+  .unit-row:last-child{border-bottom:none;}
+  .unit-name{display:flex; flex-direction:column;}
+  .unit-name b{font-size:13px;}
+  .unit-name span{font-size:10px;color:#6b6a5d;letter-spacing:0.5px;}
+  .stepper{display:flex;align-items:center;gap:8px;}
+  .stepper button{
+    width:24px;height:24px;
+    border:1px solid var(--ink);
+    background:var(--paper);
+    font-family:'Courier Prime',monospace;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .stepper button:hover{background:var(--ink);color:var(--paper);}
+  .count{width:20px;text-align:center;font-weight:700;}
+
+  .fire-btn{
+    display:block;
+    width:100%;
+    margin:6px 0 24px;
+    padding:16px;
+    background:var(--rust);
+    color:var(--paper);
+    border:none;
+    font-family:'Special Elite',monospace;
+    font-size:16px;
+    letter-spacing:3px;
+    text-transform:uppercase;
+    cursor:pointer;
+    position:relative;
+  }
+  .fire-btn:hover{background:#8a3225;}
+  .fire-btn:disabled{background:#8a8672;cursor:default;}
+  .fire-btn:active{transform:translateY(1px);}
+
+  .report{
+    background:var(--paper-dark);
+    border:1px solid var(--line);
+    padding:16px 18px;
+    margin-bottom:20px;
+    min-height:60px;
+  }
+  .report h2{
+    font-family:'Special Elite',monospace;
+    font-size:14px;
+    text-transform:uppercase;
+    margin:0 0 10px;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .stamp{
+    font-family:'Special Elite',monospace;
+    font-size:11px;
+    color:var(--olive);
+    border:2px solid var(--olive);
+    padding:2px 8px;
+    transform:rotate(-3deg);
+    letter-spacing:1px;
+  }
+  .roll-line{
+    font-size:13px; line-height:1.9;
+    border-bottom:1px dashed var(--line);
+    padding-bottom:8px; margin-bottom:8px;
+  }
+  .dice-row{display:inline-flex; gap:4px; margin-left:6px;}
+  .die{
+    display:inline-flex; align-items:center;justify-content:center;
+    width:20px; height:20px;
+    border:1.5px solid var(--ink);
+    font-size:11px; font-weight:700;
+    font-family:'Courier Prime',monospace;
+  }
+  .die.hit{background:var(--rust); color:var(--paper); border-color:var(--rust);}
+  .result-line{font-size:13px; font-weight:700; color:var(--olive-dark);}
+
+  .audit{
+    border:1px solid var(--line);
+    background:var(--paper-dark);
+    padding:16px 18px;
+  }
+  .audit h2{
+    font-family:'Special Elite',monospace;
+    font-size:13px;
+    text-transform:uppercase;
+    margin:0 0 4px;
+  }
+  .audit .note{font-size:11px;color:#6b6a5d;margin-bottom:12px;}
+  .bars{display:flex; align-items:flex-end; gap:10px; height:110px; margin-bottom:6px;}
+  .bar-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;}
+  .bar{
+    width:100%;
+    background:var(--olive);
+    position:relative;
+    transition:height 0.3s ease;
+    min-height:2px;
+  }
+  .bar.expected-line{position:absolute; left:0; right:0; height:1px; background:var(--rust); border-top:1px dashed var(--rust);}
+  .bar-label{font-size:10px; margin-top:6px; letter-spacing:1px;}
+  .bar-pct{font-size:9px; color:#6b6a5d;}
+  .audit-foot{
+    display:flex; justify-content:space-between;
+    font-size:11px; color:#6b6a5d; margin-top:10px;
+    border-top:1px dashed var(--line); padding-top:8px;
+  }
+  .reset{
+    background:none;border:1px solid var(--ink); color:var(--ink);
+    font-family:'Courier Prime',monospace; font-size:11px;
+    padding:4px 10px; cursor:pointer;
+  }
+  .reset:hover{background:var(--ink); color:var(--paper);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Prototype — Combat Resolution Only</div>
+    <h1>After Action: Battle Resolver</h1>
+    <div class="sub">Set attacker and defender units, roll combat, and read the result below. Every die uses your browser's cryptographic randomizer — nothing server-side, nothing biased. The audit panel tracks every roll of the session so you can see the real distribution for yourself.</div>
+  </header>
+
+  <div class="grid">
+    <div class="card" data-tag="Attacker">
+      <h2>Attacking Force</h2>
+      <div id="attacker-units"></div>
+    </div>
+    <div class="card" data-tag="Defender">
+      <h2>Defending Force</h2>
+      <div id="defender-units"></div>
+    </div>
+  </div>
+
+  <div class="card" data-tag="Rule" style="margin-bottom:18px;">
+    <h2 style="margin-bottom:8px;">Casualty Selection</h2>
+    <div style="font-size:12px;color:#5b5a4f;margin-bottom:10px;line-height:1.5;">Who gets picked when hits land. "Cheapest first" matches the official rule (lowest IPC cost dies first); "owner's choice" is a common house rule.</div>
+    <select id="casualtyRule" style="font-family:'Courier Prime',monospace;font-size:13px;padding:6px 8px;border:1px solid var(--ink);background:var(--paper);width:100%;">
+      <option value="cheapest">Cheapest first (official)</option>
+      <option value="owner">Owner's choice</option>
+    </select>
+  </div>
+
+  <button class="fire-btn" id="fireBtn">Roll Combat</button>
+
+  <div class="report">
+    <h2>Battle Report <span class="stamp" id="stamp" style="display:none;">Resolved</span></h2>
+    <div id="reportBody"><div class="roll-line" style="border:none;color:#6b6a5d;">No rolls yet. Set your forces and fire when ready.</div></div>
+  </div>
+
+  <div class="audit">
+    <h2>Fairness Audit</h2>
+    <div class="note">Cumulative distribution of every die rolled this session. Dashed line marks the expected 16.7% per face on a fair six-sided die.</div>
+    <div class="bars" id="bars"></div>
+    <div class="audit-foot">
+      <span id="totalRolls">Total dice rolled: 0</span>
+      <button class="reset" id="resetAudit">Reset audit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---- Unit data: simplified Axis & Allies 1942-style stats (attack / defense, out of 6) ----
+const UNIT_TYPES = [
+  {key:'inf', name:'Infantry', sub:'atk 1 / def 2 · 3 IPC', atk:1, def:2, cost:3},
+  {key:'tank', name:'Tank', sub:'atk 3 / def 3 · 5 IPC', atk:3, def:3, cost:5},
+  {key:'fighter', name:'Fighter', sub:'atk 3 / def 4 · 10 IPC', atk:3, def:4, cost:10},
+  {key:'bomber', name:'Bomber', sub:'atk 4 / def 1 · 12 IPC', atk:4, def:1, cost:12},
+];
+
+let state = {
+  attacker: {inf:0, tank:0, fighter:2, bomber:2},
+  defender: {inf:0, tank:0, fighter:0, bomber:0},
+};
+
+let auditCounts = [0,0,0,0,0,0]; // index 0 = face 1 ... index 5 = face 6
+
+function renderUnitPanel(side){
+  const container = document.getElementById(side + '-units');
+  container.innerHTML = '';
+  UNIT_TYPES.forEach(u => {
+    const row = document.createElement('div');
+    row.className = 'unit-row';
+    row.innerHTML = `
+      <div class="unit-name"><b>${u.name}</b><span>${u.sub}</span></div>
+      <div class="stepper">
+        <button data-side="${side}" data-key="${u.key}" data-delta="-1">−</button>
+        <span class="count" id="${side}-${u.key}-count">${state[side][u.key]}</span>
+        <button data-side="${side}" data-key="${u.key}" data-delta="1">+</button>
+      </div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function attachStepperEvents(){
+  document.querySelectorAll('.stepper button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const side = btn.dataset.side, key = btn.dataset.key, delta = parseInt(btn.dataset.delta);
+      const next = Math.max(0, state[side][key] + delta);
+      state[side][key] = next;
+      document.getElementById(`${side}-${key}-count`).textContent = next;
+    });
+  });
+}
+
+// Cryptographically secure die roll, 1-6, no modulo bias (rejection sampling)
+function rollDie(){
+  const max = 256 - (256 % 6); // 252, largest multiple of 6 under 256
+  let byte;
+  do {
+    byte = crypto.getRandomValues(new Uint8Array(1))[0];
+  } while (byte >= max);
+  return (byte % 6) + 1;
+}
+
+function rollPool(count){
+  const rolls = [];
+  for(let i=0;i<count;i++) rolls.push(rollDie());
+  return rolls;
+}
+
+function recordAudit(rolls){
+  rolls.forEach(r => auditCounts[r-1]++);
+  renderAudit();
+}
+
+function totalUnits(side){
+  return Object.values(state[side]).reduce((a,b)=>a+b,0);
+}
+
+function buildRollLine(label, unit, rolls, threshold){
+  const hits = rolls.filter(r => r <= threshold).length;
+  const diceHtml = rolls.map(r => `<span class="die ${r<=threshold?'hit':''}">${r}</span>`).join('');
+  return `<div class="roll-line"><b>${label}</b> — ${unit.name} ×${rolls.length} (needs ≤${threshold})
+    <span class="dice-row">${diceHtml}</span>
+    <div class="result-line">${hits} hit${hits!==1?'s':''}</div>
+  </div>`;
+}
+
+let pending = null; // holds in-progress owner's-choice casualty assignment
+
+function casualtyLabel(removedMap){
+  const parts = [];
+  UNIT_TYPES.forEach(u => {
+    const n = removedMap[u.key] || 0;
+    if(n > 0) parts.push(`${n} × ${u.name}`);
+  });
+  return parts.length ? parts.join(', ') : 'none';
+}
+
+function selectCasualtiesCheapest(side, losses){
+  let remaining = losses;
+  const removed = {};
+  const sorted = [...UNIT_TYPES].sort((a,b) => a.cost - b.cost);
+  for(const u of sorted){
+    if(remaining <= 0) break;
+    const available = state[side][u.key];
+    const take = Math.min(available, remaining);
+    if(take > 0){
+      state[side][u.key] -= take;
+      removed[u.key] = (removed[u.key] || 0) + take;
+      remaining -= take;
+    }
+  }
+  return removed;
+}
+
+function resolveCombat(){
+  const aTotal = totalUnits('attacker');
+  const dTotal = totalUnits('defender');
+  if(aTotal === 0 && dTotal === 0){
+    document.getElementById('reportBody').innerHTML = `<div class="roll-line" style="border:none;color:#6b6a5d;">Add at least one unit to a side before rolling.</div>`;
+    return;
+  }
+
+  let html = '';
+  let attackerHits = 0, defenderHits = 0;
+  let allRolls = [];
+
+  UNIT_TYPES.forEach(u => {
+    const count = state.attacker[u.key];
+    if(count > 0){
+      const rolls = rollPool(count);
+      allRolls = allRolls.concat(rolls);
+      attackerHits += rolls.filter(r => r <= u.atk).length;
+      html += buildRollLine('Attacker', u, rolls, u.atk);
+    }
+  });
+  UNIT_TYPES.forEach(u => {
+    const count = state.defender[u.key];
+    if(count > 0){
+      const rolls = rollPool(count);
+      allRolls = allRolls.concat(rolls);
+      defenderHits += rolls.filter(r => r <= u.def).length;
+      html += buildRollLine('Defender', u, rolls, u.def);
+    }
+  });
+
+  html += `<div class="roll-line"><b>Hits scored:</b> Attacker lands ${attackerHits} hit${attackerHits!==1?'s':''} on the defender. Defender lands ${defenderHits} hit${defenderHits!==1?'s':''} on the attacker.</div>`;
+
+  const defenderLossesNeeded = Math.min(attackerHits, totalUnits('defender'));
+  const attackerLossesNeeded = Math.min(defenderHits, totalUnits('attacker'));
+  const rule = document.getElementById('casualtyRule').value;
+
+  document.getElementById('reportBody').innerHTML = html;
+  recordAudit(allRolls);
+
+  if(rule === 'cheapest'){
+    let casHtml = '';
+    if(defenderLossesNeeded > 0){
+      const removed = selectCasualtiesCheapest('defender', defenderLossesNeeded);
+      casHtml += `<div class="roll-line"><b>Defender casualties:</b> ${casualtyLabel(removed)}</div>`;
+    }
+    if(attackerLossesNeeded > 0){
+      const removed = selectCasualtiesCheapest('attacker', attackerLossesNeeded);
+      casHtml += `<div class="roll-line"><b>Attacker casualties:</b> ${casualtyLabel(removed)}</div>`;
+    }
+    if(defenderLossesNeeded === 0 && attackerLossesNeeded === 0){
+      casHtml += `<div class="roll-line" style="border:none;color:#6b6a5d;">No hits landed on either side.</div>`;
+    }
+    document.getElementById('reportBody').innerHTML += casHtml;
+    renderUnitPanel('attacker');
+    renderUnitPanel('defender');
+    attachStepperEvents();
+    document.getElementById('stamp').style.display = 'inline-block';
+  } else {
+    // owner's choice: build interactive picker for any side that took losses
+    if(defenderLossesNeeded === 0 && attackerLossesNeeded === 0){
+      document.getElementById('reportBody').innerHTML += `<div class="roll-line" style="border:none;color:#6b6a5d;">No hits landed on either side.</div>`;
+      document.getElementById('stamp').style.display = 'inline-block';
+      return;
+    }
+    pending = {
+      defender: { needed: defenderLossesNeeded, assigned: {} },
+      attacker: { needed: attackerLossesNeeded, assigned: {} },
+    };
+    UNIT_TYPES.forEach(u => { pending.defender.assigned[u.key] = 0; pending.attacker.assigned[u.key] = 0; });
+    renderCasualtyPicker();
+  }
+}
+
+function renderCasualtyPicker(){
+  let html = '<div class="roll-line" style="border:none;"><b>Assign casualties</b> — pick which units are lost on each side, then confirm.</div>';
+
+  ['defender','attacker'].forEach(side => {
+    const p = pending[side];
+    if(p.needed === 0) return;
+    const assignedTotal = Object.values(p.assigned).reduce((a,b)=>a+b,0);
+    html += `<div class="roll-line">
+      <b>${side === 'defender' ? 'Defender' : 'Attacker'} must lose ${p.needed} unit${p.needed!==1?'s':''}</b>
+      (assigned: <span id="${side}-assigned-count">${assignedTotal}</span> / ${p.needed})`;
+    UNIT_TYPES.forEach(u => {
+      const available = state[side][u.key];
+      if(available === 0) return;
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;">
+        <span>${u.name} (have ${available})</span>
+        <span class="stepper">
+          <button class="cas-btn" data-side="${side}" data-key="${u.key}" data-delta="-1">−</button>
+          <span class="count" id="cas-${side}-${u.key}">${p.assigned[u.key]}</span>
+          <button class="cas-btn" data-side="${side}" data-key="${u.key}" data-delta="1">+</button>
+        </span>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+
+  html += `<button class="fire-btn" id="confirmCasualties" style="background:var(--olive);margin-top:4px;">Confirm Casualties</button>`;
+
+  document.getElementById('reportBody').innerHTML += html;
+
+  document.querySelectorAll('.cas-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const side = btn.dataset.side, key = btn.dataset.key, delta = parseInt(btn.dataset.delta);
+      const p = pending[side];
+      const assignedTotal = Object.values(p.assigned).reduce((a,b)=>a+b,0);
+      const available = state[side][key];
+      const next = p.assigned[key] + delta;
+      if(next < 0) return;
+      if(next > available) return;
+      if(delta > 0 && assignedTotal >= p.needed) return;
+      p.assigned[key] = next;
+      document.getElementById(`cas-${side}-${key}`).textContent = next;
+      const newTotal = Object.values(p.assigned).reduce((a,b)=>a+b,0);
+      document.getElementById(`${side}-assigned-count`).textContent = newTotal;
+    });
+  });
+
+  document.getElementById('confirmCasualties').addEventListener('click', () => {
+    const ready = ['defender','attacker'].every(side => {
+      const p = pending[side];
+      const assignedTotal = Object.values(p.assigned).reduce((a,b)=>a+b,0);
+      return assignedTotal === p.needed;
+    });
+    if(!ready){
+      alert('Assign exactly the required number of losses on each side before confirming.');
+      return;
+    }
+    let casHtml = '';
+    ['defender','attacker'].forEach(side => {
+      const p = pending[side];
+      if(p.needed === 0) return;
+      UNIT_TYPES.forEach(u => { state[side][u.key] -= p.assigned[u.key]; });
+      casHtml += `<div class="roll-line"><b>${side==='defender'?'Defender':'Attacker'} casualties:</b> ${casualtyLabel(p.assigned)}</div>`;
+    });
+    document.getElementById('reportBody').innerHTML += casHtml;
+    pending = null;
+    renderUnitPanel('attacker');
+    renderUnitPanel('defender');
+    attachStepperEvents();
+    document.getElementById('stamp').style.display = 'inline-block';
+  });
+}
+
+function renderAudit(){
+  const total = auditCounts.reduce((a,b)=>a+b,0);
+  const barsEl = document.getElementById('bars');
+  barsEl.innerHTML = '';
+  const maxCount = Math.max(...auditCounts, 1);
+  for(let face=1; face<=6; face++){
+    const count = auditCounts[face-1];
+    const pct = total > 0 ? ((count/total)*100).toFixed(1) : '0.0';
+    const heightPct = total > 0 ? Math.max((count/maxCount)*100, count>0?4:0) : 0;
+    const col = document.createElement('div');
+    col.className = 'bar-col';
+    col.innerHTML = `
+      <div style="position:relative; width:100%; height:100%; display:flex; align-items:flex-end;">
+        <div class="bar" style="height:${heightPct}%;"></div>
+      </div>
+      <div class="bar-label">${face}</div>
+      <div class="bar-pct">${pct}%</div>
+    `;
+    barsEl.appendChild(col);
+  }
+  document.getElementById('totalRolls').textContent = `Total dice rolled: ${total}`;
+}
+
+document.getElementById('fireBtn').addEventListener('click', resolveCombat);
+document.getElementById('resetAudit').addEventListener('click', () => {
+  auditCounts = [0,0,0,0,0,0];
+  renderAudit();
+});
+
+renderUnitPanel('attacker');
+renderUnitPanel('defender');
+attachStepperEvents();
+renderAudit();
+</script>
+</body>
+</html>
