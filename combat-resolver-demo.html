@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Axis &amp; Allies — Combat Resolver</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Prototype — Combat Resolution Only</div>
+    <h1>After Action: Battle Resolver</h1>
+    <div class="sub">Set attacker and defender units, roll combat, and read the result below. Every die uses your browser's cryptographic randomizer — nothing server-side, nothing biased. The audit panel tracks every roll of the session so you can see the real distribution for yourself.</div>
+    <div style="margin-top:8px;"><a class="nav-link" href="index.html">← Back to the Turn Loop</a></div>
+  </header>
+
+  <div class="grid">
+    <div class="card" data-tag="Attacker">
+      <h2>Attacking Force</h2>
+      <div id="attacker-units"></div>
+    </div>
+    <div class="card" data-tag="Defender">
+      <h2>Defending Force</h2>
+      <div id="defender-units"></div>
+    </div>
+  </div>
+
+  <div class="card" data-tag="Rule" style="margin-bottom:18px;">
+    <h2 style="margin-bottom:8px;">Casualty Selection</h2>
+    <div style="font-size:12px;color:#5b5a4f;margin-bottom:10px;line-height:1.5;">Who gets picked when hits land. "Cheapest first" matches the official rule (lowest IPC cost dies first); "owner's choice" is a common house rule.</div>
+    <select id="casualtyRule" style="font-family:'Courier Prime',monospace;font-size:13px;padding:6px 8px;border:1px solid var(--ink);background:var(--paper);width:100%;">
+      <option value="cheapest">Cheapest first (official)</option>
+      <option value="owner">Owner's choice</option>
+    </select>
+  </div>
+
+  <button class="fire-btn" id="fireBtn">Roll Combat</button>
+
+  <div class="report">
+    <h2>Battle Report <span class="stamp" id="stamp" style="display:none;">Resolved</span></h2>
+    <div id="reportBody"><div class="roll-line" style="border:none;color:#6b6a5d;">No rolls yet. Set your forces and fire when ready.</div></div>
+  </div>
+
+  <div class="audit">
+    <h2>Fairness Audit</h2>
+    <div class="note">Cumulative distribution of every die rolled this session. Dashed line marks the expected 16.7% per face on a fair six-sided die.</div>
+    <div class="bars" id="bars"></div>
+    <div class="audit-foot">
+      <span id="totalRolls">Total dice rolled: 0</span>
+      <button class="reset" id="resetAudit">Reset audit</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
