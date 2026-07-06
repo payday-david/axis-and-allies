@@ -68,6 +68,14 @@ This is a starting point, not a spec to follow rigidly — refine as needed once
 6. Build AI opponent using the scoring approach above, starting with attack/defense decisions before adding purchase logic.
 7. Playtest loop, then iterate on rules and AI weighting based on how games actually feel.
 
+## Known tech debt
+- **Unit stats are duplicated**: `js/units.js` (array, used by app/combat/turns/game) and
+  `js/data/units.js` (keyed object, used by map.js) both define the same Infantry/Tank/
+  Fighter/Bomber stats independently. Fine to leave as-is for now, but reconcile into one
+  shared source before building the AI opponent (item 4 above) — it needs to read
+  consistent unit stats from a single place, and scoring logic shouldn't have to guess
+  which copy is authoritative.
+
 ## Important context about the person building this
 - No coding background — needs things explained in plain language, and code changes described in terms of what they do, not just what changed.
 - Prefers incremental, testable pieces over big-bang builds.

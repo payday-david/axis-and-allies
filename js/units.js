@@ -1,4 +1,7 @@
 // Simplified Axis & Allies 1942-style unit stats: attack / defense out of 6, IPC cost.
+// TODO: duplicated in js/data/units.js (array here vs. keyed object there, same
+// numbers). Reconcile into one shared source before the AI opponent is built —
+// it needs a single consistent place to read unit stats from. See project-brief.md.
 export const UNIT_TYPES = [
   { key: 'inf', name: 'Infantry', sub: 'atk 1 / def 2 · 3 IPC', atk: 1, def: 2, cost: 3 },
   { key: 'tank', name: 'Tank', sub: 'atk 3 / def 3 · 5 IPC', atk: 3, def: 3, cost: 5 },
