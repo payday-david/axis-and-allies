@@ -229,3 +229,22 @@ select{
 }
 .log-line{font-size:11px; padding:4px 0; border-bottom:1px dashed var(--line); line-height:1.5;}
 .log-line:last-child{border-bottom:none;}
+
+/* --- Clickable territory map --- */
+#map-svg{width:100%; height:auto; display:block; user-select:none;}
+.map-edge{stroke:var(--line); stroke-width:2;}
+.map-territory rect{stroke:var(--ink); stroke-width:1.5; transition:stroke 0.15s ease, stroke-width 0.15s ease;}
+.map-territory .map-name{font-family:'Courier Prime',monospace; font-weight:700; font-size:11px; fill:var(--ink);}
+.map-territory .map-units{font-family:'Courier Prime',monospace; font-size:10px; fill:var(--ink);}
+.map-territory .map-ipc{font-family:'Courier Prime',monospace; font-size:8px; fill:#4a4a3f;}
+.map-territory.map-selectable{cursor:pointer;}
+.map-territory.map-selectable rect{stroke:var(--rust); stroke-width:2.5; stroke-dasharray:4 2;}
+.map-territory.map-valid-target{cursor:pointer;}
+.map-territory.map-valid-target rect{stroke:var(--olive-dark); stroke-width:2.5; stroke-dasharray:4 2;}
+.map-territory.map-selected-from rect{stroke:var(--rust); stroke-width:3.5;}
+.map-territory.map-selected-to rect{stroke:var(--olive-dark); stroke-width:3.5;}
+.map-territory.map-in-combat rect{stroke:var(--rust); stroke-width:3; stroke-dasharray:2 2;}
+
+.map-legend{display:flex; flex-wrap:wrap; gap:10px 14px; margin-top:10px; font-size:10px; color:#5b5a4f;}
+.map-legend span{display:flex; align-items:center; gap:5px;}
+.map-legend i{display:inline-block; width:10px; height:10px; border:1px solid var(--ink);}

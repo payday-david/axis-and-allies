@@ -26,10 +26,18 @@
 
   <div class="phase-steps" id="phase-steps"></div>
 
-  <div class="grid" style="grid-template-columns:1fr 1fr;">
+  <div class="grid" style="grid-template-columns:1.3fr 1fr;">
     <div class="card" data-tag="Territories">
       <h2>The Board</h2>
-      <div id="board"></div>
+      <svg id="map-svg" viewBox="0 0 790 480" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="map-legend">
+        <span><i style="background:#c48a7c;"></i>Germany</span>
+        <span><i style="background:#d1a55c;"></i>Japan</span>
+        <span><i style="background:#93a06a;"></i>United States</span>
+        <span><i style="background:#7b93a1;"></i>United Kingdom</span>
+        <span><i style="background:#9b83a3;"></i>USSR</span>
+        <span><i style="background:#d8d3c2;"></i>Unowned</span>
+      </div>
     </div>
     <div class="card" data-tag="This Phase">
       <h2 id="phase-panel-title">Actions</h2>

@@ -13,10 +13,44 @@ import {
 let map = createGameMap();
 let state = createTurnState(map);
 
+// UI-only selection state for the clickable map (not part of game state -
+// it resets whenever the phase changes or an action completes).
+let selection = { from: null, to: null };
+
 function startNewGame() {
   map = createGameMap();
   state = createTurnState(map);
+  selection = { from: null, to: null };
   render();
+}
+
+// Board layout mirrors the ASCII adjacency diagram in js/data/territories.js -
+// purely presentational, so it lives here rather than in the map data model.
+const LAYOUT = {
+  siberia: { col: 0, row: 0 }, russia: { col: 1, row: 0 }, easternEurope: { col: 2, row: 0 },
+  germany: { col: 3, row: 0 }, westernEurope: { col: 4, row: 0 },
+  manchuria: { col: 0, row: 1 }, balticSea: { col: 3, row: 1 }, northAtlantic: { col: 4, row: 1 },
+  seaOfJapan: { col: 0, row: 2 }, unitedKingdom: { col: 3, row: 2 }, easternUS: { col: 4, row: 2 },
+  japan: { col: 0, row: 3 }, northPacific: { col: 1, row: 3 }, westernUS: { col: 2, row: 3 },
+};
+const SHORT_NAMES = {
+  easternUS: 'E. USA', westernUS: 'W. USA', unitedKingdom: 'UK', russia: 'Russia', siberia: 'Siberia',
+  westernEurope: 'W. Europe', germany: 'Germany', easternEurope: 'E. Europe', japan: 'Japan',
+  manchuria: 'Manchuria', northAtlantic: 'N. Atlantic', balticSea: 'Baltic Sea',
+  northPacific: 'N. Pacific', seaOfJapan: 'Sea of Japan',
+};
+const NATION_COLORS = { germany: '#c48a7c', japan: '#d1a55c', usa: '#93a06a', uk: '#7b93a1', ussr: '#9b83a3' };
+const UNOWNED_COLOR = '#d8d3c2';
+
+const CELL_W = 150, CELL_H = 110, BOX_W = 132, BOX_H = 72, ORIGIN_X = 20, ORIGIN_Y = 20;
+
+function boxTopLeft(id) {
+  const { col, row } = LAYOUT[id];
+  return { x: ORIGIN_X + col * CELL_W, y: ORIGIN_Y + row * CELL_H };
+}
+function boxCenter(id) {
+  const { x, y } = boxTopLeft(id);
+  return { x: x + BOX_W / 2, y: y + BOX_H / 2 };
 }
 
 function ownedTerritories(nation) {
@@ -30,6 +64,56 @@ function ownedTerritoriesWithUnits(nation) {
 function unitLabel(units) {
   const parts = Object.entries(units).filter(([, n]) => n > 0).map(([key, n]) => `${n} ${key}`);
   return parts.length ? parts.join(', ') : 'none';
+}
+
+function compactUnits(units) {
+  const abbr = { inf: 'I', tank: 'T', fighter: 'F', bomber: 'B' };
+  const parts = Object.entries(units).filter(([, n]) => n > 0).map(([key, n]) => `${n}${abbr[key]}`);
+  return parts.length ? parts.join(' ') : '—';
+}
+
+// Pure eligibility checks, independent of current selection - used both to
+// decide what's clickable and to highlight valid choices on the map.
+function territoryQualifiesAsSource(territoryId) {
+  const phase = currentPhase(state);
+  const nation = currentNation(state);
+  const t = state.map[territoryId];
+  if (t.owner !== nation || totalUnits(t.units) === 0) return false;
+  if (phase === 'combatMove') return t.adjacent.some(id => state.map[id].owner !== nation);
+  if (phase === 'nonCombatMove') return t.adjacent.some(id => state.map[id].owner === nation);
+  return false;
+}
+
+function territoryQualifiesAsTarget(territoryId) {
+  if (!selection.from) return false;
+  const phase = currentPhase(state);
+  const nation = currentNation(state);
+  const from = state.map[selection.from];
+  if (!from.adjacent.includes(territoryId)) return false;
+  const t = state.map[territoryId];
+  if (phase === 'combatMove') return t.owner !== nation;
+  if (phase === 'nonCombatMove') return t.owner === nation;
+  return false;
+}
+
+function handleTerritoryClick(territoryId) {
+  const phase = currentPhase(state);
+  if (phase !== 'combatMove' && phase !== 'nonCombatMove') return;
+  if (phase === 'combatMove' && state.pendingAttack) return;
+
+  if (selection.from === territoryId) {
+    selection = { from: null, to: null };
+  } else if (!selection.from) {
+    if (territoryQualifiesAsSource(territoryId)) selection.from = territoryId;
+  } else if (!selection.to) {
+    if (territoryQualifiesAsTarget(territoryId)) {
+      selection.to = territoryId;
+    } else if (territoryQualifiesAsSource(territoryId)) {
+      selection.from = territoryId;
+    }
+  }
+  renderMap();
+  renderPhasePanel();
 }
 
 function renderHeader() {
@@ -49,21 +133,48 @@ function renderHeader() {
   }).join('<span class="phase-arrow">›</span>');
 }
 
-function renderBoard() {
-  const boardEl = document.getElementById('board');
-  boardEl.innerHTML = '';
+function renderMap() {
+  const svgEl = document.getElementById('map-svg');
+
+  const edgesSeen = new Set();
+  let linesHtml = '';
   Object.values(state.map).forEach(t => {
-    const row = document.createElement('div');
-    row.className = 'territory-row';
-    const ownerLabel = t.owner ? NATIONS[t.owner].name : '(unowned)';
-    const ownerCls = t.owner ? (NATIONS[t.owner].side === 'axis' ? 'side-axis' : 'side-allies') : '';
-    row.innerHTML = `
-      <span class="t-name">${t.name}${t.isCapital ? ' ★' : ''}</span>
-      <span class="t-owner ${ownerCls}">${ownerLabel}</span>
-      <span class="t-ipc">${t.ipcValue} IPC</span>
-      <span class="t-units">${unitLabel(t.units)}</span>
+    t.adjacent.forEach(otherId => {
+      const key = [t.id, otherId].sort().join('|');
+      if (edgesSeen.has(key)) return;
+      edgesSeen.add(key);
+      const a = boxCenter(t.id), b = boxCenter(otherId);
+      linesHtml += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" class="map-edge" />`;
+    });
+  });
+
+  let boxesHtml = '';
+  Object.values(state.map).forEach(t => {
+    const { x, y } = boxTopLeft(t.id);
+    const fill = t.owner ? NATION_COLORS[t.owner] : UNOWNED_COLOR;
+    const classes = ['map-territory'];
+    if (!t.owner) classes.push('map-unowned');
+    if (!selection.from && territoryQualifiesAsSource(t.id)) classes.push('map-selectable');
+    if (selection.from === t.id) classes.push('map-selected-from');
+    if (selection.from && !selection.to && territoryQualifiesAsTarget(t.id)) classes.push('map-valid-target');
+    if (selection.to === t.id) classes.push('map-selected-to');
+    if (state.pendingAttack && (t.id === state.pendingAttack.fromId || t.id === state.pendingAttack.toId)) {
+      classes.push('map-in-combat');
+    }
+
+    boxesHtml += `
+      <g class="${classes.join(' ')}" data-territory="${t.id}">
+        <rect x="${x}" y="${y}" width="${BOX_W}" height="${BOX_H}" rx="4" style="fill:${fill}"></rect>
+        <text x="${x + BOX_W / 2}" y="${y + 17}" class="map-name" text-anchor="middle">${SHORT_NAMES[t.id]}${t.isCapital ? ' ★' : ''}</text>
+        <text x="${x + BOX_W / 2}" y="${y + 33}" class="map-units" text-anchor="middle">${compactUnits(t.units)}</text>
+        <text x="${x + BOX_W - 6}" y="${y + BOX_H - 6}" class="map-ipc" text-anchor="end">${t.ipcValue} IPC</text>
+      </g>
     `;
-    boardEl.appendChild(row);
+  });
+
+  svgEl.innerHTML = linesHtml + boxesHtml;
+  svgEl.querySelectorAll('.map-territory').forEach(el => {
+    el.addEventListener('click', () => handleTerritoryClick(el.dataset.territory));
   });
 }
 
@@ -101,6 +212,7 @@ function renderPhasePanel() {
   if (nextBtn) {
     nextBtn.addEventListener('click', () => {
       advancePhase(state);
+      selection = { from: null, to: null };
       render();
     });
   }
@@ -146,74 +258,74 @@ function renderCombatMovePanel(nation) {
     `;
   }
 
-  const sources = ownedTerritoriesWithUnits(nation);
-  if (sources.length === 0) {
+  const hasSource = ownedTerritoriesWithUnits(nation).some(t => territoryQualifiesAsSource(t.id));
+  if (!hasSource) {
     return `
       <div class="note">No territories with units available to attack from.</div>
       <button class="fire-btn" id="next-phase-btn">Next: Combat Resolution</button>
     `;
   }
 
-  const fromOptions = sources.map(t => `<option value="${t.id}">${t.name} (${unitLabel(t.units)})</option>`).join('');
+  if (!selection.from) {
+    return `
+      <div class="note">Click one of your highlighted territories on the map to attack from.</div>
+      <button class="fire-btn" id="next-phase-btn" style="background:var(--olive);">Skip Attack — Next: Combat Resolution</button>
+    `;
+  }
+
+  const from = state.map[selection.from];
+  if (!selection.to) {
+    return `
+      <div class="note">Attacking from <b>${from.name}</b> (${unitLabel(from.units)}). Click an outlined adjacent enemy territory to target it, or click ${from.name} again to cancel.</div>
+      <button class="fire-btn" id="next-phase-btn" style="background:var(--olive);">Skip Attack — Next: Combat Resolution</button>
+    `;
+  }
+
+  const to = state.map[selection.to];
+  const unitsHtml = UNIT_TYPES
+    .filter(u => (from.units[u.key] || 0) > 0)
+    .map(u => `
+      <div class="unit-row">
+        <div class="unit-name"><b>${u.name}</b><span>have ${from.units[u.key]}</span></div>
+        <div class="stepper">
+          <button class="atk-unit-btn" data-key="${u.key}" data-delta="-1">−</button>
+          <span class="count" id="atk-${u.key}-count">0</span>
+          <button class="atk-unit-btn" data-key="${u.key}" data-delta="1">+</button>
+        </div>
+      </div>
+    `).join('');
+
   return `
-    <div class="note">Pick a territory you control, an adjacent enemy territory, and how many of each unit to send. One attack per turn.</div>
-    <label class="field-label">Attack from</label>
-    <select id="attack-from">${fromOptions}</select>
-    <label class="field-label">Attack target</label>
-    <select id="attack-to"></select>
-    <div id="attack-units"></div>
+    <div class="note">Attacking <b>${to.name}</b> from <b>${from.name}</b>. Choose how many of each unit to send.</div>
+    ${unitsHtml}
     <button class="fire-btn" id="declare-attack-btn" style="margin-top:10px;">Declare Attack</button>
-    <button class="fire-btn" id="next-phase-btn" style="background:var(--olive);">Skip Attack — Next: Combat Resolution</button>
+    <button class="fire-btn" id="cancel-attack-btn" style="background:var(--olive);">Cancel</button>
   `;
 }
 
 function attachCombatMoveEvents() {
-  const fromSel = document.getElementById('attack-from');
-  const toSel = document.getElementById('attack-to');
-  if (!fromSel) return;
-  const nation = currentNation(state);
-
-  function refreshTargets() {
-    const from = state.map[fromSel.value];
-    const hostile = from.adjacent.filter(id => state.map[id].owner !== nation);
-    toSel.innerHTML = hostile.map(id => `<option value="${id}">${state.map[id].name}</option>`).join('');
-    refreshUnitPickers();
-  }
-
-  function refreshUnitPickers() {
-    const from = state.map[fromSel.value];
-    const unitsEl = document.getElementById('attack-units');
-    unitsEl.innerHTML = UNIT_TYPES
-      .filter(u => (from.units[u.key] || 0) > 0)
-      .map(u => `
-        <div class="unit-row">
-          <div class="unit-name"><b>${u.name}</b><span>have ${from.units[u.key]}</span></div>
-          <div class="stepper">
-            <button class="atk-unit-btn" data-key="${u.key}" data-delta="-1">−</button>
-            <span class="count" id="atk-${u.key}-count">0</span>
-            <button class="atk-unit-btn" data-key="${u.key}" data-delta="1">+</button>
-          </div>
-        </div>
-      `).join('');
+  if (selection.from && selection.to) {
+    const from = state.map[selection.from];
     attachUnitStepper('.atk-unit-btn', (key) => (from.units[key] || 0));
-  }
-
-  fromSel.addEventListener('change', refreshTargets);
-  refreshTargets();
-
-  document.getElementById('declare-attack-btn').addEventListener('click', () => {
-    const force = {};
-    UNIT_TYPES.forEach(u => {
-      const el = document.getElementById(`atk-${u.key}-count`);
-      if (el) force[u.key] = parseInt(el.textContent, 10) || 0;
+    document.getElementById('declare-attack-btn').addEventListener('click', () => {
+      const force = {};
+      UNIT_TYPES.forEach(u => {
+        const el = document.getElementById(`atk-${u.key}-count`);
+        if (el) force[u.key] = parseInt(el.textContent, 10) || 0;
+      });
+      const result = declareAttack(state, selection.from, selection.to, force);
+      if (!result.ok) {
+        alert(`Can't declare attack: ${result.reason}`);
+        return;
+      }
+      selection = { from: null, to: null };
+      render();
     });
-    const result = declareAttack(state, fromSel.value, toSel.value, force);
-    if (!result.ok) {
-      alert(`Can't declare attack: ${result.reason}`);
-      return;
-    }
-    render();
-  });
+    document.getElementById('cancel-attack-btn').addEventListener('click', () => {
+      selection = { from: null, to: null };
+      render();
+    });
+  }
 }
 
 function attachUnitStepper(selector, maxForKey) {
@@ -268,11 +380,11 @@ function attachCombatResolutionEvents() {
     result.defenderRolls.forEach(r => { html += buildRollLine('Defender', r.unit, r.rolls, r.threshold); });
     html += `<div class="roll-line"><b>Hits:</b> attacker ${result.attackerHits}, defender ${result.defenderHits}. Remaining — attacker ${result.attackerRemaining}, defender ${result.defenderRemaining}.</div>`;
     document.getElementById('combat-report').innerHTML = html + document.getElementById('combat-report').innerHTML;
+    renderMap();
 
     if (result.concluded) {
       rollBtn.disabled = true;
       retreatBtn.disabled = true;
-      renderBoard();
     }
   });
 
@@ -283,75 +395,74 @@ function attachCombatResolutionEvents() {
 }
 
 function renderNonCombatMovePanel(nation) {
-  const sources = ownedTerritoriesWithUnits(nation).filter(t =>
-    t.adjacent.some(id => state.map[id].owner === nation)
-  );
-  if (sources.length === 0) {
+  const hasSource = ownedTerritoriesWithUnits(nation).some(t => territoryQualifiesAsSource(t.id));
+  if (!hasSource) {
     return `
       <div class="note">No repositioning available.</div>
       <button class="fire-btn" id="next-phase-btn">Next: Mobilize</button>
     `;
   }
-  const fromOptions = sources.map(t => `<option value="${t.id}">${t.name} (${unitLabel(t.units)})</option>`).join('');
+
+  if (!selection.from) {
+    return `
+      <div class="note">Click one of your highlighted territories on the map to move units from, or continue to Mobilize.</div>
+      <button class="fire-btn" id="next-phase-btn" style="background:var(--olive);">Next: Mobilize</button>
+    `;
+  }
+
+  const from = state.map[selection.from];
+  if (!selection.to) {
+    return `
+      <div class="note">Moving from <b>${from.name}</b> (${unitLabel(from.units)}). Click an outlined adjacent territory you own as the destination, or click ${from.name} again to cancel.</div>
+      <button class="fire-btn" id="next-phase-btn" style="background:var(--olive);">Next: Mobilize</button>
+    `;
+  }
+
+  const to = state.map[selection.to];
+  const unitsHtml = UNIT_TYPES
+    .filter(u => (from.units[u.key] || 0) > 0)
+    .map(u => `
+      <div class="unit-row">
+        <div class="unit-name"><b>${u.name}</b><span>have ${from.units[u.key]}</span></div>
+        <div class="stepper">
+          <button class="mv-unit-btn" data-key="${u.key}" data-delta="-1">−</button>
+          <span class="count" id="mv-${u.key}-count">0</span>
+          <button class="mv-unit-btn" data-key="${u.key}" data-delta="1">+</button>
+        </div>
+      </div>
+    `).join('');
+
   return `
-    <div class="note">Optionally reposition units between your own adjacent territories.</div>
-    <label class="field-label">Move from</label>
-    <select id="move-from">${fromOptions}</select>
-    <label class="field-label">Move to</label>
-    <select id="move-to"></select>
-    <div id="move-units"></div>
+    <div class="note">Moving units from <b>${from.name}</b> to <b>${to.name}</b>.</div>
+    ${unitsHtml}
     <button class="fire-btn" id="move-units-btn" style="margin-top:10px;">Move Units</button>
-    <button class="fire-btn" id="next-phase-btn" style="background:var(--olive);">Next: Mobilize</button>
+    <button class="fire-btn" id="cancel-move-btn" style="background:var(--olive);">Cancel</button>
   `;
 }
 
 function attachNonCombatMoveEvents() {
-  const fromSel = document.getElementById('move-from');
-  const toSel = document.getElementById('move-to');
-  if (!fromSel) return;
-  const nation = currentNation(state);
-
-  function refreshTargets() {
-    const from = state.map[fromSel.value];
-    const friendly = from.adjacent.filter(id => state.map[id].owner === nation);
-    toSel.innerHTML = friendly.map(id => `<option value="${id}">${state.map[id].name}</option>`).join('');
-    refreshUnitPickers();
-  }
-
-  function refreshUnitPickers() {
-    const from = state.map[fromSel.value];
-    const unitsEl = document.getElementById('move-units');
-    unitsEl.innerHTML = UNIT_TYPES
-      .filter(u => (from.units[u.key] || 0) > 0)
-      .map(u => `
-        <div class="unit-row">
-          <div class="unit-name"><b>${u.name}</b><span>have ${from.units[u.key]}</span></div>
-          <div class="stepper">
-            <button class="mv-unit-btn" data-key="${u.key}" data-delta="-1">−</button>
-            <span class="count" id="mv-${u.key}-count">0</span>
-            <button class="mv-unit-btn" data-key="${u.key}" data-delta="1">+</button>
-          </div>
-        </div>
-      `).join('');
+  if (selection.from && selection.to) {
+    const from = state.map[selection.from];
     attachUnitStepper('.mv-unit-btn', (key) => (from.units[key] || 0));
-  }
-
-  fromSel.addEventListener('change', refreshTargets);
-  refreshTargets();
-
-  document.getElementById('move-units-btn').addEventListener('click', () => {
-    const force = {};
-    UNIT_TYPES.forEach(u => {
-      const el = document.getElementById(`mv-${u.key}-count`);
-      if (el) force[u.key] = parseInt(el.textContent, 10) || 0;
+    document.getElementById('move-units-btn').addEventListener('click', () => {
+      const force = {};
+      UNIT_TYPES.forEach(u => {
+        const el = document.getElementById(`mv-${u.key}-count`);
+        if (el) force[u.key] = parseInt(el.textContent, 10) || 0;
+      });
+      const result = moveUnitsNonCombat(state, selection.from, selection.to, force);
+      if (!result.ok) {
+        alert(`Can't move units: ${result.reason}`);
+        return;
+      }
+      selection = { from: null, to: null };
+      render();
     });
-    const result = moveUnitsNonCombat(state, fromSel.value, toSel.value, force);
-    if (!result.ok) {
-      alert(`Can't move units: ${result.reason}`);
-      return;
-    }
-    render();
-  });
+    document.getElementById('cancel-move-btn').addEventListener('click', () => {
+      selection = { from: null, to: null };
+      render();
+    });
+  }
 }
 
 function renderMobilizePanel(nation) {
@@ -375,7 +486,7 @@ function renderIncomePanel(nation) {
 
 function render() {
   renderHeader();
-  renderBoard();
+  renderMap();
   renderPhasePanel();
   renderLog();
 }
