@@ -26,6 +26,10 @@ function startNewGame() {
 
 // Board layout mirrors the ASCII adjacency diagram in js/data/territories.js -
 // purely presentational, so it lives here rather than in the map data model.
+// Each territory occupies a full grid cell; whether it visually touches its
+// grid neighbor (zero-gap shared border, like a Risk-style province map) or
+// stays separated by open parchment is derived below from real adjacency,
+// so touching on screen always means "these are actually adjacent."
 const LAYOUT = {
   siberia: { col: 0, row: 0 }, russia: { col: 1, row: 0 }, easternEurope: { col: 2, row: 0 },
   germany: { col: 3, row: 0 }, westernEurope: { col: 4, row: 0 },
@@ -39,18 +43,116 @@ const SHORT_NAMES = {
   manchuria: 'Manchuria', northAtlantic: 'N. Atlantic', balticSea: 'Baltic Sea',
   northPacific: 'N. Pacific', seaOfJapan: 'Sea of Japan',
 };
-const NATION_COLORS = { germany: '#c48a7c', japan: '#d1a55c', usa: '#93a06a', uk: '#7b93a1', ussr: '#9b83a3' };
-const UNOWNED_COLOR = '#d8d3c2';
+// Historical faction colors rather than an arbitrary palette: Germany
+// feldgrau, Japan's rising-sun red-orange, US navy blue, UK khaki, USSR red.
+const NATION_COLORS = { germany: '#6b6459', japan: '#c1533a', usa: '#3f6e8c', uk: '#7a7a4a', ussr: '#9c3b3b' };
+const SEA_ZONES = new Set(['northAtlantic', 'balticSea', 'northPacific', 'seaOfJapan']);
+const SEA_FILL = '#8fb3c4';
 
-const CELL_W = 150, CELL_H = 110, BOX_W = 132, BOX_H = 72, ORIGIN_X = 20, ORIGIN_Y = 20;
+// Two adjacent pairs sit diagonally in the grid and never share a cell edge,
+// so they can't touch no matter how the shapes are drawn - drawn instead as
+// dashed sea-route arcs connecting the two territories.
+const SEA_ROUTES = [
+  { from: 'easternUS', to: 'westernUS', control: { x: 370, y: 430 } },
+  { from: 'unitedKingdom', to: 'northAtlantic', control: { x: 650, y: 250 } },
+];
 
-function boxTopLeft(id) {
+const CELL_W = 170, CELL_H = 130, ORIGIN_X = 30, ORIGIN_Y = 30, MARGIN = 13;
+
+function cellRect(id) {
   const { col, row } = LAYOUT[id];
-  return { x: ORIGIN_X + col * CELL_W, y: ORIGIN_Y + row * CELL_H };
+  const x0 = ORIGIN_X + col * CELL_W, y0 = ORIGIN_Y + row * CELL_H;
+  return { x0, y0, x1: x0 + CELL_W, y1: y0 + CELL_H };
 }
-function boxCenter(id) {
-  const { x, y } = boxTopLeft(id);
-  return { x: x + BOX_W / 2, y: y + BOX_H / 2 };
+function cellCenter(id) {
+  const { x0, y0, x1, y1 } = cellRect(id);
+  return { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
+}
+
+// For each territory, whether its North/East/South/West side sits against
+// another territory it's actually adjacent to (computed once from the
+// static adjacency graph - owner/units change during play, adjacency never does).
+function computeSideTouch(territories) {
+  const cellOf = {};
+  Object.entries(LAYOUT).forEach(([id, pos]) => { cellOf[`${pos.col},${pos.row}`] = id; });
+  const DIRS = { N: [0, -1], E: [1, 0], S: [0, 1], W: [-1, 0] };
+  const touch = {};
+  Object.keys(LAYOUT).forEach(id => {
+    touch[id] = {};
+    Object.entries(DIRS).forEach(([dir, [dc, dr]]) => {
+      const { col, row } = LAYOUT[id];
+      const neighborId = cellOf[`${col + dc},${row + dr}`];
+      touch[id][dir] = !!(neighborId && territories[id].adjacent.includes(neighborId));
+    });
+  });
+  return touch;
+}
+const SIDE_TOUCH = computeSideTouch(map);
+
+// Deterministic per-territory jitter so the hand-drawn wobble is stable
+// across re-renders instead of reshuffling on every click.
+function seededRandom(seedStr) {
+  let h = 0;
+  for (let i = 0; i < seedStr.length; i++) h = (Math.imul(31, h) + seedStr.charCodeAt(i)) | 0;
+  return function next() {
+    h = Math.imul(h ^ (h >>> 15), h | 1);
+    h ^= h + Math.imul(h ^ (h >>> 7), h | 61);
+    return ((h ^ (h >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Builds the outline of one territory: sides shared with an adjacent
+// territory stay a straight zero-gap edge; open sides pull inward and get
+// a jittered, multi-segment coastline for a hand-drawn feel.
+function buildTerritoryOutline(id) {
+  const rng = seededRandom(id);
+  const { x0, y0, x1, y1 } = cellRect(id);
+  const t = SIDE_TOUCH[id];
+  const top = t.N ? y0 : y0 + MARGIN;
+  const bottom = t.S ? y1 : y1 - MARGIN;
+  const left = t.W ? x0 : x0 + MARGIN;
+  const right = t.E ? x1 : x1 - MARGIN;
+
+  const corners = { TL: [left, top], TR: [right, top], BR: [right, bottom], BL: [left, bottom] };
+  const points = [corners.TL];
+
+  function addSide(from, to, jagged) {
+    if (!jagged) { points.push(to); return; }
+    const steps = 4;
+    const dx = to[0] - from[0], dy = to[1] - from[1];
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    for (let i = 1; i <= steps; i++) {
+      const f = i / steps;
+      const x = from[0] + dx * f, y = from[1] + dy * f;
+      if (i === steps) { points.push([x, y]); continue; }
+      const jitter = (rng() - 0.5) * 16;
+      points.push([x + nx * jitter, y + ny * jitter]);
+    }
+  }
+
+  addSide(corners.TL, corners.TR, !t.N);
+  addSide(corners.TR, corners.BR, !t.E);
+  addSide(corners.BR, corners.BL, !t.S);
+  addSide(corners.BL, corners.TL, !t.W);
+  return points;
+}
+
+// Land renders as straight jittered segments (angular, hand-cut coastline).
+// Sea renders as smoothed curves through the same points (wavy water).
+function pathFromPoints(points, smooth) {
+  if (!smooth) {
+    return `M ${points[0][0]},${points[0][1]} ` +
+      points.slice(1).map(p => `L ${p[0]},${p[1]}`).join(' ') + ' Z';
+  }
+  let d = `M ${points[0][0]},${points[0][1]} `;
+  for (let i = 0; i < points.length; i++) {
+    const curr = points[i];
+    const next = points[(i + 1) % points.length];
+    const midX = (curr[0] + next[0]) / 2, midY = (curr[1] + next[1]) / 2;
+    d += `Q ${curr[0]},${curr[1]} ${midX},${midY} `;
+  }
+  return d + 'Z';
 }
 
 function ownedTerritories(nation) {
@@ -133,27 +235,32 @@ function renderHeader() {
   }).join('<span class="phase-arrow">›</span>');
 }
 
+const WAVE_PATTERN_DEFS = `
+  <defs>
+    <pattern id="wavePattern" width="40" height="18" patternUnits="userSpaceOnUse">
+      <path d="M0,9 Q10,2 20,9 T40,9" stroke="#5f8298" stroke-width="1.5" fill="none" opacity="0.55"></path>
+    </pattern>
+  </defs>
+`;
+
 function renderMap() {
   const svgEl = document.getElementById('map-svg');
 
-  const edgesSeen = new Set();
-  let linesHtml = '';
-  Object.values(state.map).forEach(t => {
-    t.adjacent.forEach(otherId => {
-      const key = [t.id, otherId].sort().join('|');
-      if (edgesSeen.has(key)) return;
-      edgesSeen.add(key);
-      const a = boxCenter(t.id), b = boxCenter(otherId);
-      linesHtml += `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" class="map-edge" />`;
-    });
+  let routesHtml = '';
+  SEA_ROUTES.forEach(({ from, to, control }) => {
+    const a = cellCenter(from), b = cellCenter(to);
+    routesHtml += `<path d="M ${a.x},${a.y} Q ${control.x},${control.y} ${b.x},${b.y}" class="map-route" />`;
   });
 
-  let boxesHtml = '';
+  let shapesHtml = '';
   Object.values(state.map).forEach(t => {
-    const { x, y } = boxTopLeft(t.id);
-    const fill = t.owner ? NATION_COLORS[t.owner] : UNOWNED_COLOR;
-    const classes = ['map-territory'];
-    if (!t.owner) classes.push('map-unowned');
+    const isSea = SEA_ZONES.has(t.id);
+    const points = buildTerritoryOutline(t.id);
+    const d = pathFromPoints(points, isSea);
+    const fill = isSea ? SEA_FILL : NATION_COLORS[t.owner];
+    const center = cellCenter(t.id);
+
+    const classes = ['map-territory', isSea ? 'map-sea' : 'map-land'];
     if (!selection.from && territoryQualifiesAsSource(t.id)) classes.push('map-selectable');
     if (selection.from === t.id) classes.push('map-selected-from');
     if (selection.from && !selection.to && territoryQualifiesAsTarget(t.id)) classes.push('map-valid-target');
@@ -162,17 +269,24 @@ function renderMap() {
       classes.push('map-in-combat');
     }
 
-    boxesHtml += `
+    const labels = isSea
+      ? `<text x="${center.x}" y="${center.y + 4}" class="map-name map-sea-name" text-anchor="middle">${SHORT_NAMES[t.id]}</text>`
+      : `
+        <text x="${center.x}" y="${center.y - 12}" class="map-name" text-anchor="middle">${SHORT_NAMES[t.id]}${t.isCapital ? ' ★' : ''}</text>
+        <text x="${center.x}" y="${center.y + 4}" class="map-units" text-anchor="middle">${compactUnits(t.units)}</text>
+        <text x="${center.x}" y="${center.y + 18}" class="map-ipc" text-anchor="middle">${t.ipcValue} IPC</text>
+      `;
+
+    shapesHtml += `
       <g class="${classes.join(' ')}" data-territory="${t.id}">
-        <rect x="${x}" y="${y}" width="${BOX_W}" height="${BOX_H}" rx="4" style="fill:${fill}"></rect>
-        <text x="${x + BOX_W / 2}" y="${y + 17}" class="map-name" text-anchor="middle">${SHORT_NAMES[t.id]}${t.isCapital ? ' ★' : ''}</text>
-        <text x="${x + BOX_W / 2}" y="${y + 33}" class="map-units" text-anchor="middle">${compactUnits(t.units)}</text>
-        <text x="${x + BOX_W - 6}" y="${y + BOX_H - 6}" class="map-ipc" text-anchor="end">${t.ipcValue} IPC</text>
+        <path d="${d}" class="map-shape" style="fill:${fill}"></path>
+        ${isSea ? `<path d="${d}" class="map-wave-overlay"></path>` : ''}
+        ${labels}
       </g>
     `;
   });
 
-  svgEl.innerHTML = linesHtml + boxesHtml;
+  svgEl.innerHTML = WAVE_PATTERN_DEFS + routesHtml + shapesHtml;
   svgEl.querySelectorAll('.map-territory').forEach(el => {
     el.addEventListener('click', () => handleTerritoryClick(el.dataset.territory));
   });
